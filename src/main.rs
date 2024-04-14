@@ -23,9 +23,9 @@ fn main() {
                     Ok(_) => {
                         let req = std::str::from_utf8(&buffer).unwrap();
                         let http_request = parse_req(req).unwrap();
-                        let mut resp = OK_RESPONSE;
-                        if http_request.path != "/" {
-                            resp = NOT_FOUND_RESPONSE;
+                        let mut resp = NOT_FOUND_RESPONSE;
+                        if http_request.path == "/" {
+                            resp = OK_RESPONSE;
                         }
 
                         match stream.write(resp.as_bytes()) {
