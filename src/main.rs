@@ -66,9 +66,7 @@ enum HttpMethod {
 }
 
 fn echo_response(path: &str) -> String {
-    let values: Vec<&str> = path.split("/").collect();
-    println!("{:?}", values);
-    let body = values[2];
+    let body = path.strip_prefix("/echo/").unwrap();
     let length = body.len();
     let content_length = format!("Content-Length: {}", length);
     format!("{}{}{}\r\n\r\n{}", OK_RESPONSE, CONTENT_TYPE, content_length, body)
