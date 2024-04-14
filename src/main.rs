@@ -50,6 +50,8 @@ fn main() {
                     Ok(_) => println!("ok"),
                     Err(e) => println!("error: {:?}", e),
                 }
+
+                stream.flush().unwrap();
             }
 
             Err(e) => {
