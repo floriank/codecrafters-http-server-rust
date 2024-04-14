@@ -1,4 +1,5 @@
 use anyhow::Error;
+use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::net::TcpListener;
 
@@ -7,10 +8,11 @@ struct HttpRequest {
     path: String,
     method: HttpMethod,
     version: String,
+    user_agent: String,
 }
 
 impl HttpRequest {
-    fn new(path: &str, version: &str, method: &str) -> Self {
+    fn new(path: &str, version: &str, method: &str, agent: &str) -> Self {
         let http_method = match method {
             "GET" => HttpMethod::GET,
             _ => todo!("implement later"),
@@ -19,6 +21,7 @@ impl HttpRequest {
             path: path.to_string(),
             method: http_method,
             version: version.to_string(),
+            user_agent: agent.to_string(),
         }
     }
 }
@@ -68,30 +71,56 @@ enum HttpMethod {
 fn echo_response(path: &str) -> String {
     let body = path.strip_prefix("/echo/").unwrap();
     let length = body.len();
-    let content_length = format!("Content-Length: {}", length);
-    format!("{}{}{}\r\n\r\n{}", OK_RESPONSE, CONTENT_TYPE, content_length, body)
+    let content_length = format!("content-length: {}", length);
+    format!(
+        "{}{}{}\r\n\r\n{}",
+        OK_RESPONSE, CONTENT_TYPE, content_length, body
+    )
+}
+
+fn user_agent(agent: &str) -> String {
+    let length = agent.len();
+    let content_length = format!("content-length: {}", length);
+    format!(
+        "{}{}{}\r\n\r\n{}",
+        OK_RESPONSE, CONTENT_TYPE, content_length, agent
+    )
 }
 
 fn handle_request(http_request: &HttpRequest) -> String {
     let req_path = http_request.path.as_str();
+    let agent = http_request.user_agent.as_str();
+
     match http_request.method {
         HttpMethod::GET => match req_path {
             "/" => OK_RESPONSE.to_string(),
             path if path.starts_with("/echo") => echo_response(path),
+            path if path.starts_with("/user-agent") => user_agent(agent),
             _ => NOT_FOUND_RESPONSE.to_string(),
         },
     }
 }
-
 fn parse_req(req: &str) -> Result<HttpRequest, Error> {
     let contents: Vec<&str> = req.lines().collect();
-    println!("contents: {:?}", contents);
     let mut method_header = contents[0].split_whitespace();
-    // TODO clean this up omg - this depends on the field order at the moment
+    let mut header_lines: Vec<&str> = contents.into_iter().take_while(|&s| s != "").collect();
+    header_lines.remove(0);
+    let mut headers = HashMap::new();
+    for line in header_lines.into_iter() {
+        let parts: Vec<&str> = line.split(":").map(|s| s.trim()).collect();
+        if parts.len() == 2 {
+            let key = parts[0].to_lowercase();
+            let value = parts[1].to_lowercase().to_string().trim().to_string();
+            headers.insert(key, value);
+        }
+    }
     let method = method_header.next().unwrap();
     let path = method_header.next().unwrap();
     let version = method_header.next().unwrap();
-    let http_request = HttpRequest::new(&path, &version, &method);
-    println!("http req: {:?}", http_request);
+    let agent = match headers.get("user-agent") {
+        Some(value) => value,
+        None => "",
+    };
+    let http_request = HttpRequest::new(&path, &version, &method, &agent);
     Ok(http_request)
 }
