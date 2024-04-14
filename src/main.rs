@@ -23,10 +23,10 @@ impl HttpRequest {
     }
 }
 
-const OK_RESPONSE: &str = "HTTP/1.1 200 OK\r\n\r\n";
-const CONTENT_TYPE: &str = "Content-Type: text/plain\r\n\r\n";
-const NOT_FOUND_RESPONSE: &str = "HTTP/1.1 404 NOT FOUND\r\n\r\n";
-const ERROR_RESPONSE: &str = "HTTP/1.1 500 Internal Server Error\r\n\r\n";
+const OK_RESPONSE: &str = "HTTP/1.1 200 OK\r\n";
+const CONTENT_TYPE: &str = "Content-Type: text/plain\r\n";
+const NOT_FOUND_RESPONSE: &str = "HTTP/1.1 404 NOT FOUND\r\n";
+const ERROR_RESPONSE: &str = "HTTP/1.1 500 Internal Server Error\r\n";
 
 fn main() {
     let listener = TcpListener::bind("127.0.0.1:4221").unwrap();
