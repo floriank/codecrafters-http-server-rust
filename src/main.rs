@@ -71,7 +71,7 @@ fn echo_response(path: &str) -> String {
     let body = values[2];
     let length = body.len();
     let content_length = format!("Content-Length: {}", length);
-    format!("{}{}{}\r\n\r\n{}", OK_RESPONSE, CONTENT_TYPE, content_length, body)
+    format!("{}{}{}\r\n\r\n{}\r\n", OK_RESPONSE, CONTENT_TYPE, content_length, body)
 }
 
 fn handle_request(http_request: &HttpRequest) -> String {
