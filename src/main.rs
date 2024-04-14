@@ -40,6 +40,7 @@ fn main() {
                         let req = std::str::from_utf8(&buffer).unwrap();
                         let http_request = parse_req(req).unwrap();
                         let resp = handle_request(&http_request);
+                        println!("{:?}", resp);
                         stream.write(resp.as_bytes())
                     }
                     Err(_) => stream.write(ERROR_RESPONSE.as_bytes()),
@@ -68,7 +69,7 @@ fn echo_response(path: &str) -> String {
     let body = values[2];
     let length = body.len();
     let content_length = format!("Content-Length: {}", length);
-    format!("{}{}{}\r\n{}", OK_RESPONSE, CONTENT_TYPE, content_length, body)
+    format!("{}{}{}\r\n\r\n{}", OK_RESPONSE, CONTENT_TYPE, content_length, body)
 }
 
 fn handle_request(http_request: &HttpRequest) -> String {
