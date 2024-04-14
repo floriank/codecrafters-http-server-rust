@@ -110,7 +110,7 @@ fn parse_req(req: &str) -> Result<HttpRequest, Error> {
         let parts: Vec<&str> = line.split(":").map(|s| s.trim()).collect();
         if parts.len() == 2 {
             let key = parts[0].to_lowercase();
-            let value = parts[1].to_lowercase().to_string().trim().to_string();
+            let value = parts[1].trim().to_string();
             headers.insert(key, value);
         }
     }
