@@ -24,6 +24,7 @@ fn main() {
                         let req = std::str::from_utf8(&buffer).unwrap();
                         let http_request = parse_req(req).unwrap();
                         let mut resp = NOT_FOUND_RESPONSE;
+                        println!("path: {:?}", http_request.path);
                         if http_request.path == "/" {
                             resp = OK_RESPONSE;
                         }
@@ -51,8 +52,8 @@ fn parse_req(req: &str) -> Result<HttpRequest, Error> {
     let mut method_header = contents[0].split_whitespace();
     let http_request = HttpRequest {
         method: String::from(method_header.next().unwrap()),
-        version: String::from(method_header.next().unwrap()),
         path: String::from(method_header.next().unwrap()),
+        version: String::from(method_header.next().unwrap()),
     };
     println!("http req: {:?}", http_request);
     Ok(http_request)
