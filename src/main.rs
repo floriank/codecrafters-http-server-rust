@@ -25,8 +25,8 @@ impl HttpRequest {
 
 const OK_RESPONSE: &str = "HTTP/1.1 200 OK\r\n";
 const CONTENT_TYPE: &str = "Content-Type: text/plain\r\n";
-const NOT_FOUND_RESPONSE: &str = "HTTP/1.1 404 NOT FOUND\r\n";
-const ERROR_RESPONSE: &str = "HTTP/1.1 500 Internal Server Error\r\n";
+const NOT_FOUND_RESPONSE: &str = "HTTP/1.1 404 NOT FOUND\r\n\r\n";
+const ERROR_RESPONSE: &str = "HTTP/1.1 500 Internal Server Error\r\n\r\n";
 
 fn main() {
     let listener = TcpListener::bind("127.0.0.1:4221").unwrap();
@@ -40,8 +40,8 @@ fn main() {
                         let req = std::str::from_utf8(&buffer).unwrap();
                         let http_request = parse_req(req).unwrap();
                         let resp = handle_request(&http_request);
-                        println!("{:?}", resp);
-                        stream.write(resp.as_bytes())
+                        let with_linebreaks = format!("{}\r\n", resp);
+                        stream.write(with_linebreaks.as_bytes())
                     }
                     Err(_) => stream.write(ERROR_RESPONSE.as_bytes()),
                 };
@@ -71,7 +71,7 @@ fn echo_response(path: &str) -> String {
     let body = values[2];
     let length = body.len();
     let content_length = format!("Content-Length: {}", length);
-    format!("{}{}{}\r\n\r\n{}\r\n", OK_RESPONSE, CONTENT_TYPE, content_length, body)
+    format!("{}{}{}\r\n\r\n{}", OK_RESPONSE, CONTENT_TYPE, content_length, body)
 }
 
 fn handle_request(http_request: &HttpRequest) -> String {
