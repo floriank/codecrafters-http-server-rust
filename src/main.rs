@@ -1,7 +1,9 @@
 use anyhow::Error;
+use tokio::main;
 use std::collections::HashMap;
 use std::io::{Read, Write};
-use std::net::TcpListener;
+use std::net::SocketAddr;
+use tokio::{io::{AsyncReadExt, AsyncWriteExt}, net::TcpListener};
 
 #[derive(Debug)]
 struct HttpRequest {
@@ -31,36 +33,28 @@ const CONTENT_TYPE: &str = "Content-Type: text/plain\r\n";
 const NOT_FOUND_RESPONSE: &str = "HTTP/1.1 404 NOT FOUND\r\n\r\n";
 const ERROR_RESPONSE: &str = "HTTP/1.1 500 Internal Server Error\r\n\r\n";
 
-fn main() {
-    let listener = TcpListener::bind("127.0.0.1:4221").unwrap();
+#[main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let address = SocketAddr::from(([127, 0, 0, 1], 4221));
+    let listener = TcpListener::bind(&address).await?;
 
-    for stream in listener.incoming() {
-        match stream {
-            Ok(mut stream) => {
-                let mut buffer = [0; 1024];
-                let result = match stream.read(&mut buffer) {
-                    Ok(_) => {
-                        let req = std::str::from_utf8(&buffer).unwrap();
-                        let http_request = parse_req(req).unwrap();
-                        let resp = handle_request(&http_request);
-                        let with_linebreaks = format!("{}\r\n", resp);
-                        stream.write(with_linebreaks.as_bytes())
-                    }
-                    Err(_) => stream.write(ERROR_RESPONSE.as_bytes()),
-                };
+    println!("Listening on address https://{}", address);
 
-                match result {
-                    Ok(_) => println!("ok"),
-                    Err(e) => println!("error: {:?}", e),
+    loop {
+        let (mut stream, _) = listener.accept().await?;
+        tokio::spawn(async move {
+            let mut buffer = [0; 1024];
+            match stream.read(&mut buffer).await {
+                Ok(_) => {
+                    let req = std::str::from_utf8(&buffer).unwrap();
+                    let http_request = parse_req(req).unwrap();
+                    let resp = handle_request(&http_request);
+                    let with_linebreaks = format!("{}\r\n", resp);
+                    let _ = stream.write(with_linebreaks.as_bytes()).await; 
                 }
-
-                stream.flush().unwrap();
+                Err(_) => { let _ = stream.write(ERROR_RESPONSE.as_bytes()).await; }
             }
-
-            Err(e) => {
-                println!("error: {}", e);
-            }
-        }
+        });
     }
 }
 #[derive(Debug)]
