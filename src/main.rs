@@ -2,7 +2,7 @@ use anyhow::Error;
 use clap::Parser;
 use std::collections::HashMap;
 use std::fs::File;
-use std::io::{Read, Write};
+use std::io::{BufWriter, Read, Write};
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -39,7 +39,7 @@ impl HttpRequest {
             method: http_method,
             version: version.to_string(),
             user_agent: agent.to_string(),
-            body: body.to_string(),
+            body: body.trim_end_matches('\0').to_string(),
         }
     }
 }
@@ -129,8 +129,10 @@ fn save_file(body: &str, req_path: &str, args: &Arc<Args>) -> String {
     path.push(args.directory.as_ref().unwrap_or(&PathBuf::from(".")));
     path.push(&req_path[7..]);
     match File::create(path) {
-        Ok(mut file) => {
-            let _ = file.write_all(body.as_bytes());
+        Ok(file) => {
+            let mut writer = BufWriter::new(file);
+            writer.write(body.as_bytes()).unwrap();
+            writer.flush().unwrap();
             let content_length = format!("content-length: {}", body.len());
             format!("{}{}{}\r\n\r\n{}", CREATED_RESPONSE, OCTET_STREAM, content_length, body)
         }
@@ -179,9 +181,8 @@ fn parse_req(req: &str) -> Result<HttpRequest, Error> {
         Some(value) => value,
         None => "",
     };
-    let body_start = req.find("\r\n\r\n").unwrap();
-    let body = &req[(body_start + 4)..];
+    let req_parts: Vec<_> = req.split("\r\n\r\n").map(|s| s.to_string()).collect();
 
-    let http_request = HttpRequest::new(&path, &version, &method, &agent, &body);
+    let http_request = HttpRequest::new(&path, &version, &method, &agent, &req_parts[1]);
     Ok(http_request)
 }
