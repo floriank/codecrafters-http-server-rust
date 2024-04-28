@@ -121,15 +121,16 @@ fn send_file(req_path: &str, args: &Arc<Args>) -> String {
     path.push(&req_path[7..]);
     match File::open(path) {
         Ok(mut file) => {
-            let mut buffer = vec![];
-            if let Err(e) = file.read_to_end(&mut buffer) {
-                format!("read file error: {}", e)
-            } else {
-                let content_length = format!("content-length: {}", buffer.len());
-                format!(
-                    "{}{}{}\r\n\r\n{:?}",
-                    OK_RESPONSE, OCTET_STREAM, content_length, buffer
-                )
+            let mut content = String::new();
+            match file.read_to_string(&mut content) {
+                Err(_) => NOT_FOUND_RESPONSE.to_string(),
+                Ok(_) => {
+                    let content_length = format!("content-length: {}", content.len());
+                    format!(
+                        "{}{}{}\r\n\r\n{}",
+                        OK_RESPONSE, OCTET_STREAM, content_length, content 
+                    )
+                }
             }
         }
         Err(_) => NOT_FOUND_RESPONSE.to_string(),
