@@ -131,9 +131,8 @@ fn save_file(body: &str, req_path: &str, args: &Arc<Args>) -> String {
     match File::create(path) {
         Ok(mut file) => {
             let _ = file.write_all(body.as_bytes());
-            println!("{}", body);
             let content_length = format!("content-length: {}", body.len());
-            format!("{}{}{}", CREATED_RESPONSE, OCTET_STREAM, content_length)
+            format!("{}{}{}\r\n\r\n{}", CREATED_RESPONSE, OCTET_STREAM, content_length, body)
         }
         Err(_) => ERROR_RESPONSE.to_string(),
     }
