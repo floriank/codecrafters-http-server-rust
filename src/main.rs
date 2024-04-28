@@ -1,9 +1,17 @@
 use anyhow::Error;
-use tokio::main;
+use clap::Parser;
 use std::collections::HashMap;
+use std::fs::File;
 use std::io::{Read, Write};
 use std::net::SocketAddr;
-use tokio::{io::{AsyncReadExt, AsyncWriteExt}, net::TcpListener};
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::{fs, process};
+use tokio::main;
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    net::TcpListener,
+};
 
 #[derive(Debug)]
 struct HttpRequest {
@@ -28,10 +36,17 @@ impl HttpRequest {
     }
 }
 
+#[derive(Parser, Debug)]
+struct Args {
+    #[arg(short, long)]
+    directory: Option<PathBuf>,
+}
+
 const OK_RESPONSE: &str = "HTTP/1.1 200 OK\r\n";
 const CONTENT_TYPE: &str = "Content-Type: text/plain\r\n";
 const NOT_FOUND_RESPONSE: &str = "HTTP/1.1 404 NOT FOUND\r\n\r\n";
 const ERROR_RESPONSE: &str = "HTTP/1.1 500 Internal Server Error\r\n\r\n";
+const OCTET_STREAM: &str = "Content-Type: application/octet-stream\r\n";
 
 #[main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -42,17 +57,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     loop {
         let (mut stream, _) = listener.accept().await?;
+        let args = Arc::new(Args::parse());
         tokio::spawn(async move {
             let mut buffer = [0; 1024];
+            let args = Arc::clone(&args);
             match stream.read(&mut buffer).await {
                 Ok(_) => {
                     let req = std::str::from_utf8(&buffer).unwrap();
                     let http_request = parse_req(req).unwrap();
-                    let resp = handle_request(&http_request);
+                    let resp = handle_request(&http_request, &args);
                     let with_linebreaks = format!("{}\r\n", resp);
-                    let _ = stream.write(with_linebreaks.as_bytes()).await; 
+                    let _ = stream.write(with_linebreaks.as_bytes()).await;
                 }
-                Err(_) => { let _ = stream.write(ERROR_RESPONSE.as_bytes()).await; }
+                Err(_) => {
+                    let _ = stream.write(ERROR_RESPONSE.as_bytes()).await;
+                }
             }
         });
     }
@@ -81,7 +100,7 @@ fn user_agent(agent: &str) -> String {
     )
 }
 
-fn handle_request(http_request: &HttpRequest) -> String {
+fn handle_request(http_request: &HttpRequest, args: &Arc<Args>) -> String {
     let req_path = http_request.path.as_str();
     let agent = http_request.user_agent.as_str();
 
@@ -90,8 +109,30 @@ fn handle_request(http_request: &HttpRequest) -> String {
             "/" => OK_RESPONSE.to_string(),
             path if path.starts_with("/echo") => echo_response(path),
             path if path.starts_with("/user-agent") => user_agent(agent),
+            path if path.starts_with("/files/") => send_file(path, args),
             _ => NOT_FOUND_RESPONSE.to_string(),
         },
+    }
+}
+
+fn send_file(req_path: &str, args: &Arc<Args>) -> String {
+    let mut path = PathBuf::new();
+    path.push(args.directory.as_ref().unwrap_or(&PathBuf::from(".")));
+    path.push(&req_path[7..]);
+    match File::open(path) {
+        Ok(mut file) => {
+            let mut buffer = vec![];
+            if let Err(e) = file.read_to_end(&mut buffer) {
+                format!("read file error: {}", e)
+            } else {
+                let content_length = format!("content-length: {}", buffer.len());
+                format!(
+                    "{}{}{}\r\n\r\n{:?}",
+                    OK_RESPONSE, OCTET_STREAM, content_length, buffer
+                )
+            }
+        }
+        Err(_) => NOT_FOUND_RESPONSE.to_string(),
     }
 }
 fn parse_req(req: &str) -> Result<HttpRequest, Error> {
