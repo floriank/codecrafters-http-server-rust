@@ -6,7 +6,6 @@ use std::io::{Read, Write};
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::{fs, process};
 use tokio::main;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
@@ -14,17 +13,25 @@ use tokio::{
 };
 
 #[derive(Debug)]
+enum HttpMethod {
+    GET,
+    POST,
+}
+
+#[derive(Debug)]
 struct HttpRequest {
     path: String,
     method: HttpMethod,
     version: String,
     user_agent: String,
+    body: String,
 }
 
 impl HttpRequest {
-    fn new(path: &str, version: &str, method: &str, agent: &str) -> Self {
+    fn new(path: &str, version: &str, method: &str, agent: &str, body: &str) -> Self {
         let http_method = match method {
             "GET" => HttpMethod::GET,
+            "POST" => HttpMethod::POST,
             _ => todo!("implement later"),
         };
         Self {
@@ -32,6 +39,7 @@ impl HttpRequest {
             method: http_method,
             version: version.to_string(),
             user_agent: agent.to_string(),
+            body: body.to_string(),
         }
     }
 }
@@ -43,6 +51,7 @@ struct Args {
 }
 
 const OK_RESPONSE: &str = "HTTP/1.1 200 OK\r\n";
+const CREATED_RESPONSE: &str = "HTTP/1.1 201 Created\r\n";
 const CONTENT_TYPE: &str = "Content-Type: text/plain\r\n";
 const NOT_FOUND_RESPONSE: &str = "HTTP/1.1 404 NOT FOUND\r\n\r\n";
 const ERROR_RESPONSE: &str = "HTTP/1.1 500 Internal Server Error\r\n\r\n";
@@ -76,10 +85,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         });
     }
 }
-#[derive(Debug)]
-enum HttpMethod {
-    GET,
-}
 
 fn echo_response(path: &str) -> String {
     let body = path.strip_prefix("/echo/").unwrap();
@@ -112,9 +117,27 @@ fn handle_request(http_request: &HttpRequest, args: &Arc<Args>) -> String {
             path if path.starts_with("/files/") => send_file(path, args),
             _ => NOT_FOUND_RESPONSE.to_string(),
         },
+        HttpMethod::POST => match req_path {
+            path if path.starts_with("/files/") => save_file(&http_request.body, path, args),
+            _ => NOT_FOUND_RESPONSE.to_string(),
+        },
     }
 }
 
+fn save_file(body: &str, req_path: &str, args: &Arc<Args>) -> String {
+    let mut path = PathBuf::new();
+    path.push(args.directory.as_ref().unwrap_or(&PathBuf::from(".")));
+    path.push(&req_path[7..]);
+    match File::create(path) {
+        Ok(mut file) => {
+            let _ = file.write_all(body.as_bytes());
+            println!("{}", body);
+            let content_length = format!("content-length: {}", body.len());
+            format!("{}{}{}", CREATED_RESPONSE, OCTET_STREAM, content_length)
+        }
+        Err(_) => ERROR_RESPONSE.to_string(),
+    }
+}
 fn send_file(req_path: &str, args: &Arc<Args>) -> String {
     let mut path = PathBuf::new();
     path.push(args.directory.as_ref().unwrap_or(&PathBuf::from(".")));
@@ -128,7 +151,7 @@ fn send_file(req_path: &str, args: &Arc<Args>) -> String {
                     let content_length = format!("content-length: {}", content.len());
                     format!(
                         "{}{}{}\r\n\r\n{}",
-                        OK_RESPONSE, OCTET_STREAM, content_length, content 
+                        OK_RESPONSE, OCTET_STREAM, content_length, content
                     )
                 }
             }
@@ -157,6 +180,9 @@ fn parse_req(req: &str) -> Result<HttpRequest, Error> {
         Some(value) => value,
         None => "",
     };
-    let http_request = HttpRequest::new(&path, &version, &method, &agent);
+    let body_start = req.find("\r\n\r\n").unwrap();
+    let body = &req[(body_start + 4)..];
+
+    let http_request = HttpRequest::new(&path, &version, &method, &agent, &body);
     Ok(http_request)
 }
